@@ -5,7 +5,7 @@ import pytest
 from mirror.examples import EXAMPLES
 from mirror.graph_builder import build_graph
 from mirror.runner import run_code
-from tests.e2e.conftest import load_example
+from tests.e2e.conftest import load_example, visualize
 from tests.test_tracer import node_for_step
 
 CODE = {e["id"]: e["code"] for e in EXAMPLES}
@@ -113,8 +113,7 @@ def test_clicking_a_node_jumps_to_when_it_runs(page):
 
 
 def test_node_that_never_ran_explains_why(page):
-    page.fill("#code", "x = 1\nif x > 5:\n    print('big')\nprint('done')\n")
-    page.click("#visualize-btn")
+    visualize(page, "x = 1\nif x > 5:\n    print('big')\nprint('done')\n")
     page.wait_for_selector(".flowchart .node")
     page.click('.node:has-text("print(\'big\')")')
     assert "never ran" in page.inner_text("#message")
@@ -150,8 +149,7 @@ def test_play_runs_to_the_end_and_speed_matters(page):
 
 
 def test_runtime_error_marks_the_failing_node(page):
-    page.fill("#code", "values = [1, 2, 0]\nfor v in values:\n    print(10 / v)\n")
-    page.click("#visualize-btn")
+    visualize(page, "values = [1, 2, 0]\nfor v in values:\n    print(10 / v)\n")
     page.wait_for_selector(".flowchart .node")
     page.click("#btn-last")
     assert page.locator(".node.is-error").count() == 1

@@ -4,7 +4,7 @@ import pytest
 
 from mirror.examples import EXAMPLES
 from mirror.graph_builder import build_graph
-from tests.e2e.conftest import load_example
+from tests.e2e.conftest import load_example, visualize
 
 SHOTS = "tests/e2e/screenshots"
 
@@ -41,8 +41,7 @@ def test_output_panel_shows_program_output(page):
 
 
 def test_syntax_error_is_shown_and_line_marked(page):
-    page.fill("#code", "x = 1\nif x > 0\n    print(x)\n")
-    page.click("#visualize-btn")
+    visualize(page, "x = 1\nif x > 0\n    print(x)\n")
     page.wait_for_selector("#message:not([hidden])")
     assert "Syntax error" in page.inner_text("#message")
     assert "line 2" in page.inner_text("#message")
@@ -51,15 +50,13 @@ def test_syntax_error_is_shown_and_line_marked(page):
 
 
 def test_blocked_import_is_explained(page):
-    page.fill("#code", "import os\nprint(os.getcwd())\n")
-    page.click("#visualize-btn")
+    visualize(page, "import os\nprint(os.getcwd())\n")
     page.wait_for_selector("#message:not([hidden])")
     text = page.inner_text("#message")
     assert "Not allowed in Code Mirror" in text and "Importing 'os' is not allowed" in text
 
 
 def test_timeout_is_explained(page):
-    page.fill("#code", "total = sum(range(10 ** 12))\n")
-    page.click("#visualize-btn")
+    visualize(page, "total = sum(range(10 ** 12))\n")
     page.wait_for_selector("#message:not([hidden])", timeout=10_000)
     assert "Time limit reached" in page.inner_text("#message")

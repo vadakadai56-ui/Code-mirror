@@ -20,15 +20,25 @@ const exampleSelect = $("example-select");
 let examples = [];
 let playback = null; // the current playback controls (replaced on every Visualize)
 
-// Playback speed. Stage 5 hands this job to motion.js, which also scales animations.
+// Animations come from motion.js, which loads the Motion library from a CDN.
+// It is imported dynamically so that, if the CDN can't be reached, the app still
+// works: `motion` stays a fallback with instant (non-animated) changes.
 let speed = 1;
-const effects = {
-  nodeEntered() {},
-  travel() {},
-  variablesChanged() {},
-  stepSeconds: (seconds) => seconds / speed,
-  stop() {},
+let motion = {
+  setSpeed: (value) => { speed = value; },
+  animateEntrance() {},
+  crossFade: (oldSvg) => oldSvg?.remove(),
+  effects: {
+    nodeEntered() {},
+    travel() {},
+    variablesChanged() {},
+    stepSeconds: (seconds) => seconds / speed,
+    stop() {},
+  },
 };
+const motionReady = import("./motion.js")
+  .then((module) => { motion = module; motion.setSpeed(speed); })
+  .catch((err) => console.warn("Animations are off: the Motion library could not be loaded.", err));
 
 const playbackUi = {
   root: $("playback"),
@@ -127,8 +137,11 @@ function render({ graph, trace }) {
     chartBox.replaceChildren(p);
     return null;
   }
+  const oldSvg = chartBox.querySelector(".flowchart:not(.flowchart--leaving)");
   const chart = drawFlowchart(chartBox, graph);
-  playback = createPlayback({ chart, graph, trace, editor, ui: playbackUi, effects });
+  motion.crossFade(oldSvg, chartBox); // previous chart fades out underneath
+  motion.animateEntrance(chart);
+  playback = createPlayback({ chart, graph, trace, editor, ui: playbackUi, effects: motion.effects });
   return chart;
 }
 
@@ -142,6 +155,7 @@ function loadExample(id) {
 
 async function init() {
   examples = await (await fetch("/api/examples")).json();
+  await motionReady; // so the very first chart already animates in
   for (const ex of examples) {
     const option = document.createElement("option");
     option.value = ex.id;
@@ -156,6 +170,7 @@ async function init() {
   const speedSlider = $("speed-slider");
   speedSlider.addEventListener("input", () => {
     speed = Number(speedSlider.value);
+    motion.setSpeed(speed);
     $("speed-label").textContent = `${speed}×`;
   });
   loadExample(examples[0].id);

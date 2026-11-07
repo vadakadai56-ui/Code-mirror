@@ -80,9 +80,20 @@ the loop node; `return` connects to its lane's `end` node.
 - `error` is `null` or `{"kind", "message", "line"}`, where kind is one of
   `syntax`, `blocked`, `runtime`, `timeout`, `crash`. When kind is `syntax`, `/api/visualize` returns `graph: null`.
 
+## Frontend modules (static/)
+
+| File | Job | Must not |
+|---|---|---|
+| `app.js` | wiring: examples menu, Visualize, error/output panels, keyboard, speed | draw SVG or animate |
+| `editor.js` | textarea, line numbers, line highlight | know about graphs |
+| `flowchart.js` | `drawFlowchart(container, graph)` → handles `{svg, nodes, edges, dot, edgeBetween}`; layout from `lane/row/col` | animate, or know about traces |
+| `playback.js` | step state, the join (`nodeForStep`), variables panel, node clicks | call Motion directly (it calls `effects`) |
+| `motion.js` | every animation (see code-mirror-motion) | change what is shown, only how it moves |
+
 ## The join: step → node
 
-The frontend must do exactly this. `tests/test_tracer.py::node_for_step` mirrors it:
+`static/playback.js::nodeForStep` does exactly this, and `tests/test_tracer.py::node_for_step`
+mirrors it in Python (the e2e playback tests compare the two):
 
 ```
 call   → graph.functions[step.func].start

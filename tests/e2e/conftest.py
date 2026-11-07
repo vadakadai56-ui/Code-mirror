@@ -92,3 +92,12 @@ def load_example(page, example_id):
         arg=example_id,
     )
     page.wait_for_selector(".flowchart .node")
+    page.wait_for_selector(".flowchart--leaving", state="detached")  # cross-fade finished
+
+
+def visualize(page, code):
+    """Type code into the editor, press Visualize, and wait for the result."""
+    page.fill("#code", code)
+    page.click("#visualize-btn")
+    page.wait_for_function("!document.querySelector('#visualize-btn').disabled")
+    page.wait_for_selector(".flowchart--leaving", state="detached")

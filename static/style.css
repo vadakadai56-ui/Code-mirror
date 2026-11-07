@@ -219,3 +219,4 @@ select {
   .chart { min-height: 360px; }
   .tagline { display: none; }
 }
+.flowchart--leaving { pointer-events: none; }
