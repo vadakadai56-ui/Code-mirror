@@ -35,6 +35,8 @@ def test_every_node_and_edge_is_drawn(page, example):
 
 def test_output_panel_shows_program_output(page):
     load_example(page, "factorial")
+    assert page.locator("#stdout").inner_text() == ""  # step 1: nothing printed yet
+    page.click("#btn-last")
     assert page.locator("#stdout").inner_text().strip() == "5! = 120"
 
 

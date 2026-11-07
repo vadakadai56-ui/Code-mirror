@@ -2,10 +2,11 @@
 // the flowchart and the error/output panels.
 //
 // Data flow:  editor text --POST /api/visualize--> {graph, trace}
-//             graph --> flowchart.js (draw)      trace --> output panel (+ playback in stage 4)
+//             graph --> flowchart.js (draw)      graph + trace --> playback.js (step through)
 
 import { createEditor } from "./editor.js";
 import { drawFlowchart } from "./flowchart.js";
+import { createPlayback } from "./playback.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -17,6 +18,35 @@ const visualizeBtn = $("visualize-btn");
 const exampleSelect = $("example-select");
 
 let examples = [];
+let playback = null; // the current playback controls (replaced on every Visualize)
+
+// Playback speed. Stage 5 hands this job to motion.js, which also scales animations.
+let speed = 1;
+const effects = {
+  nodeEntered() {},
+  travel() {},
+  variablesChanged() {},
+  stepSeconds: (seconds) => seconds / speed,
+  stop() {},
+};
+
+const playbackUi = {
+  root: $("playback"),
+  play: $("btn-play"),
+  forward: $("btn-forward"),
+  back: $("btn-back"),
+  first: $("btn-first"),
+  last: $("btn-last"),
+  slider: $("step-slider"),
+  label: $("step-label"),
+  stdout: stdoutBox,
+  variables: $("variables"),
+  varsBody: $("vars-body"),
+  scope: $("vars-scope"),
+  stack: $("call-stack"),
+  chartBox,
+  notify: (title, detail) => showMessage(title, ` ${detail}`, "info"),
+};
 
 // ------------------------------------------------------------------ messages
 const ERROR_TITLES = {
@@ -84,9 +114,12 @@ async function visualize() {
 
 /** Draw the graph and show output. Returns the chart handles (used by playback). */
 function render({ graph, trace }) {
+  playback?.destroy();
+  playback = null;
   stdoutBox.textContent = trace.stdout;
   showTraceProblems(trace);
   if (!graph) {
+    playbackUi.root.hidden = playbackUi.variables.hidden = true;
     // Syntax error: there's nothing to draw.
     const p = document.createElement("p");
     p.className = "chart__empty";
@@ -94,7 +127,9 @@ function render({ graph, trace }) {
     chartBox.replaceChildren(p);
     return null;
   }
-  return drawFlowchart(chartBox, graph);
+  const chart = drawFlowchart(chartBox, graph);
+  playback = createPlayback({ chart, graph, trace, editor, ui: playbackUi, effects });
+  return chart;
 }
 
 // ------------------------------------------------------------------ examples
@@ -115,13 +150,39 @@ async function init() {
   }
   exampleSelect.addEventListener("change", () => loadExample(exampleSelect.value));
   visualizeBtn.addEventListener("click", visualize);
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      visualize();
-    }
+  document.addEventListener("keydown", onKey);
+  $("code").addEventListener("input", () => editor.clearHighlight()); // the old trace no longer matches
+
+  const speedSlider = $("speed-slider");
+  speedSlider.addEventListener("input", () => {
+    speed = Number(speedSlider.value);
+    $("speed-label").textContent = `${speed}×`;
   });
   loadExample(examples[0].id);
+}
+
+/** Keyboard shortcuts. Arrow keys etc. only when you're not typing in the editor. */
+function onKey(e) {
+  if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault();
+    visualize();
+    return;
+  }
+  const typing = ["TEXTAREA", "INPUT", "SELECT"].includes(e.target.tagName);
+  const onNode = e.target.closest?.(".node");
+  if (!playback || typing || e.altKey || e.ctrlKey || e.metaKey) return;
+  const actions = {
+    ArrowRight: playback.forward,
+    ArrowLeft: playback.back,
+    Home: playback.first,
+    End: playback.last,
+    " ": onNode ? null : playback.toggle, // Space on a node means "jump here"
+  };
+  const action = actions[e.key];
+  if (action && !(e.target.tagName === "BUTTON" && e.key === " ")) {
+    e.preventDefault();
+    action();
+  }
 }
 
 init();

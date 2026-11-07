@@ -108,6 +108,7 @@ select {
   margin: 0; padding: 10px 12px; border: 0; resize: none; outline: none;
   background: transparent; color: var(--text);
   font: inherit; tab-size: 4; white-space: pre; overflow: auto;
+  font-variant-ligatures: none; /* the `font` shorthand above resets this, so set it again */
 }
 .editor__body textarea:focus-visible { box-shadow: inset 0 0 0 2px var(--signal); }
 .editor__highlight {

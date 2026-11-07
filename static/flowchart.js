@@ -68,7 +68,7 @@ export function layoutGraph(graph) {
     const a = nodes.get(e.from).data;
     const b = nodes.get(e.to).data;
     let route = "straight";
-    if (e.kind === "call") route = "call";
+    if (e.kind === "call") route = a.lane === b.lane ? "right" : "call"; // recursion: up the right side
     else if (e.kind === "back") route = "right";
     else if (b.row > a.row + 1) route = "left";
     const span = route === "right" ? [b.row, a.row] : [a.row, b.row];

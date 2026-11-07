@@ -69,9 +69,24 @@ approach: start the server, wait for `networkidle`, then interact. The tests liv
 skipping this level.
 
 ```bash
-python .claude/skills/webapp-testing/scripts/with_server.py \
-  --server "python app.py" --port 5000 -- python -m pytest tests/e2e -q
+pip install playwright            # once; on your own machine also: python -m playwright install chromium
+python -m pytest tests/e2e -q     # ~30 s; the fixtures start the Flask app on a free port themselves
 ```
+
+- `tests/e2e/conftest.py` provides `page` and `reduced_page` fixtures (the latter
+  emulates prefers-reduced-motion), `load_example(page, id)`, and `page.errors`
+  (JS errors and console errors). Every test should end with `assert page.errors == []`
+  where it makes sense.
+- If the normal Chromium launch fails (the cloud container has no matching download), the
+  fixture falls back to `/opt/pw-browsers/chromium-*/chrome-linux*/chrome`.
+- `test_drawing.py`: every node/edge drawn, no overlaps, error banners, and screenshots
+  in `tests/e2e/screenshots/` (git-ignored). Look at them after layout changes.
+- `test_playback.py`: compares the highlighted node and editor line at each step
+  with `node_for_step` computed in Python from the real graph and trace. This is the
+  end-to-end version of the join check.
+- SVG `<text>` has no `innerText`: use `all_text_contents()` / `text_content()` for chart labels.
+- To start the app by hand with webapp-testing's helper instead:
+  `python .claude/skills/webapp-testing/scripts/with_server.py --server "python app.py" --port 5000 -- <command>`.
 
 Things that are specific to Code Mirror:
 - **The CDN may be blocked** (the cloud dev container blocks cdn.jsdelivr.net). The e2e
