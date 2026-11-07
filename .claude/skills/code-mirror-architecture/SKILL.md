@@ -43,18 +43,21 @@ code ──► graph_builder.py (reads AST, never runs code) ──► graph JSO
 
 | Field | Meaning |
 |---|---|
-| `type` | `start`, `statement`, `decision` (if/elif), `loop` (for/while), `call` (statement that calls a user function), `return`, `end` |
+| `type` | `start`, `statement`, `decision` (if/elif/assert), `loop` (for/while), `call` (statement that calls a user function), `return`, `end` |
 | `func` | Python's `co_qualname` for the scope: `<module>`, `fib`, `Stack.push`, `outer.<locals>.inner` |
 | `lane` | one column per scope; lane 0 is the main program |
 | `row` | order inside the lane, 0..N-1 with no gaps; `end` is always last |
 | `col` | indentation depth, so the chart has the same shape as the code |
 | `calls` | names of user-defined functions called on this line |
-| edge `label` | `True`/`False` (if, while), `next`/`done` (for), `error` (try→except), or `null` |
+| edge `label` | `True`/`False` (if, while, assert), `next`/`done` (for), `error` (try→except), or `null` |
 | edge `kind` | `normal` (to a later row), `back` (to the same or an earlier row, e.g. loop repeat), `call` (dashed, to another lane's start) |
 
 Rules that tests rely on: `elif` sits at the same `col` as its `if`; `break` goes to
 whatever follows the loop; `continue` and the end of a loop body get `back` edges to
 the loop node; `return` connects to its lane's `end` node.
+`assert cond` is a `decision` labelled `assert <cond>` (the message is left out): its
+`True` edge goes to the next statement, its `False` edge goes to its lane's `end` node
+(the program stops there with `AssertionError`, which the trace reports as a `runtime` error).
 
 ## Trace JSON (from `run_code(source)`)
 
@@ -89,6 +92,18 @@ line   → graph.line_map[`${step.func}:${step.line}`]   (may be undefined → h
 
 `line_map` covers every source line a node spans. For compound statements that means
 the header lines only (e.g. a multi-line `if (...)` condition).
+
+Join rules that are easy to break:
+- Only `def` start nodes use `map_lines=False` in `_add()`, because they are reached by
+  `call` events, not `line` events. Every other node must put its header lines in
+  `line_map`. Some headers run more than once: `with` runs on entry *and* on exit,
+  and `for`/`while` run on every pass.
+- A class body runs as its own scope named after the class (e.g. `Timer`). It has no
+  lane. Instead, `functions["Timer"]` points start and end at the `class Timer` box,
+  and `line_map["Timer:<line>"]` covers the whole class, so its steps light up that box.
+- A step that legitimately has no node (for example inside a `match` case body,
+  which is drawn as one box) highlights nothing. That's allowed, but the pipeline check
+  reports it, so add a node or a mapping when you add a statement type.
 
 ## Safety layers (tracer.py / runner.py)
 

@@ -8,6 +8,10 @@ description: How to test the Code Mirror app - running the example snippets (fib
 Run from the project root. There are three levels; use the cheapest one that covers
 your change, and always finish with level 1 + 2 before committing.
 
+Before you debug, run `git status` and `git diff`. A bug can come from an uncommitted
+local edit rather than from the committed code. That's worth knowing before you start
+reading the code.
+
 ## Level 1: pipeline check (seconds)
 
 ```bash
@@ -33,7 +37,13 @@ Expected output today (update this table when examples change):
 | fizzbuzz | 10 | 13 | 1 | 72 | `1 2 Fizz 4 Buzz …` |
 
 Use `-v` when an example "looks wrong": it prints each step indented by call depth,
-with the node label it maps to and the variables at that moment.
+with the node label it maps to (`—` = no node) and the variables at that moment.
+Without `-v` the script prints the total number of unmapped steps and the first 20, so
+always check the count: the step you care about may not be among the first 20.
+
+For a program that is *meant* to fail (for example a failing `assert`), add
+`--expect-error`. The error is printed but doesn't count as a failure, and the
+step→node join is still checked.
 
 If you changed `ALLOWED_MODULES` or the builtins in `tracer.py`, also run
 `check_pipeline.py --leaks`.
@@ -54,7 +64,9 @@ on node labels and edge labels/kinds, not on node ids (ids shift when code chang
 ## Level 3: browser tests (Playwright)
 
 For frontend changes (drawing, playback, motion). Use the webapp-testing skill's
-approach: start the server, wait for `networkidle`, then interact.
+approach: start the server, wait for `networkidle`, then interact. The tests live in
+`tests/e2e/`. If a frontend feature has no browser test yet, add one there instead of
+skipping this level.
 
 ```bash
 python .claude/skills/webapp-testing/scripts/with_server.py \

@@ -74,6 +74,41 @@ def test_functions_and_modules_are_hidden_from_variables():
     assert steps[-1]["locals"] == {"x": "1"}
 
 
+def test_assert_steps_map_to_the_assert_node():
+    code = "def half(n):\n    assert n % 2 == 0, 'odd'\n    return n // 2\nx = half(4)\nassert x == 2\ny = half(3)\n"
+    graph = build_graph(code)
+    trace = run_code(code)
+    assert trace["error"] == {"kind": "runtime", "message": "AssertionError: odd", "line": 2}
+    assert [s for s in trace["steps"] if node_for_step(graph, s) is None] == []
+    assert_nodes = {n["id"] for n in graph["nodes"] if n["label"].startswith("assert")}
+    hit = [node_for_step(graph, s) for s in trace["steps"] if s["event"] == "line"]
+    assert hit.count(graph["line_map"]["half:2"]) == 2  # passed once, failed once
+    assert graph["line_map"]["<module>:5"] in hit
+    assert set(graph["line_map"][k] for k in ("half:2", "<module>:5")) == assert_nodes
+
+
+def test_with_statement_lines_map_to_nodes():
+    # Regression: the `with` header line (run on enter and again on exit) had no node.
+    code = (
+        "class Timer:\n"
+        "    def __enter__(self):\n"
+        "        return self\n"
+        "    def __exit__(self, *args):\n"
+        "        return False\n"
+        "\n"
+        "with Timer() as t:\n"
+        "    x = 1\n"
+        "print(x)\n"
+    )
+    graph = build_graph(code)
+    trace = run_code(code)
+    assert trace["error"] is None
+    with_steps = [s for s in trace["steps"] if s["func"] == "<module>" and s["line"] == 7 and s["event"] == "line"]
+    assert len(with_steps) == 2  # entering and leaving the block
+    with_node = [n for n in graph["nodes"] if n["label"] == "with Timer() as t"][0]
+    assert all(node_for_step(graph, s) == with_node["id"] for s in with_steps)
+
+
 # -------------------------------------------------------------------- errors
 def test_syntax_error():
     trace = run_code("for i in range(3)\n    print(i)\n")

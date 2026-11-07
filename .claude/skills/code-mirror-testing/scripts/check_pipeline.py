@@ -9,6 +9,9 @@ Usage (from the project root):
     python .claude/skills/code-mirror-testing/scripts/check_pipeline.py my_prog.py   # your own file(s)
     python .claude/skills/code-mirror-testing/scripts/check_pipeline.py -v           # also print every step
     python .claude/skills/code-mirror-testing/scripts/check_pipeline.py --leaks      # allowlist leak check
+    python .claude/skills/code-mirror-testing/scripts/check_pipeline.py --expect-error fails.py
+        # for programs that are SUPPOSED to raise (e.g. a failing assert): the error is
+        # printed but not counted as a failure; the step->node join is still checked
 
 Exit code 0 = all checks passed, 1 = something failed.
 It only reads files you name and runs code through Code Mirror's own sandboxed runner.
@@ -41,7 +44,7 @@ def node_for_step(graph, step):
     return graph["line_map"].get(f'{step["func"]}:{step["line"]}')
 
 
-def check_program(name, code, verbose):
+def check_program(name, code, verbose, expect_error=False):
     problems = []
     try:
         graph = build_graph(code)
@@ -58,11 +61,19 @@ def check_program(name, code, verbose):
             problems.append(f"lane {lane['func']} has gaps in its rows: {rows}")
 
     trace = run_code(code)
-    if trace["error"]:
+    if trace["error"] and not expect_error:
         problems.append(f"trace error: {trace['error']}")
+    elif trace["error"]:
+        print(f"    (expected error: {trace['error']['message']} on line {trace['error']['line']})")
+    elif expect_error:
+        problems.append("expected the program to raise an error, but it finished normally")
     unmapped = [s for s in trace["steps"] if node_for_step(graph, s) is None]
-    for s in unmapped[:5]:
+    if unmapped:
+        problems.append(f"{len(unmapped)} of {len(trace['steps'])} steps have no node (listed below)")
+    for s in unmapped[:20]:
         problems.append(f"step {s['i']} ({s['event']} {s['func']} line {s['line']}) has no node")
+    if len(unmapped) > 20:
+        problems.append(f"... and {len(unmapped) - 20} more (use -v to see every step)")
 
     if verbose:
         by_id = {n["id"]: n for n in graph["nodes"]}
@@ -96,6 +107,8 @@ def main():
     parser.add_argument("files", nargs="*", help="Python files to check (default: built-in examples)")
     parser.add_argument("-v", "--verbose", action="store_true", help="print every trace step")
     parser.add_argument("--leaks", action="store_true", help="run the module allowlist leak check")
+    parser.add_argument("--expect-error", action="store_true",
+                        help="the program is meant to raise; check the join but don't fail on the error")
     args = parser.parse_args()
 
     if args.leaks:
@@ -107,7 +120,7 @@ def main():
     for name, code in programs:
         if args.verbose:
             print(f"--- {name}")
-        problems, graph, trace = check_program(name, code, args.verbose)
+        problems, graph, trace = check_program(name, code, args.verbose, args.expect_error)
         if graph is None:
             print(f"{name:<16} {'-':>5} {'-':>5} {'-':>5} {'-':>5}  FAIL")
         else:

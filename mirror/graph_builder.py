@@ -11,7 +11,7 @@ it. The result is a plain dict that Flask sends to the browser as JSON:
       "line_map": { "qualname:line": node_id }, # how a trace step finds its node
     }
 
-Node types: start, statement, decision, loop, call, return, end.
+Node types: start, statement, decision (if/elif/assert), loop, call, return, end.
 Edge kinds: "normal" (flows down), "back" (jumps up, e.g. a loop repeating),
             "call" (from a line that calls one of your functions to that function's start).
 
@@ -151,6 +151,8 @@ class GraphBuilder:
             if self.loops:
                 self._connect([(node, None)], self.loops[-1]["header"])
             return []
+        if isinstance(s, ast.Assert):
+            return self._assert(s, preds, col)
         if isinstance(s, ast.Try):
             return self._try(s, preds, col)
         if isinstance(s, (ast.With, ast.AsyncWith)):
@@ -184,6 +186,14 @@ class GraphBuilder:
         else:
             exits.append((node, "False"))
         return exits
+
+    def _assert(self, s, preds, col):
+        """`assert cond`: a decision. True carries on; False stops the program (AssertionError),
+        so it goes straight to this lane's end node."""
+        node = self._add("decision", f"assert {ast.unparse(s.test)}", s.lineno, s.end_lineno, col, calls_in=s)
+        self._connect(preds, node)
+        self._connect([(node, "False")], self.end_id)
+        return [(node, "True")]
 
     def _is_elif(self, orelse):
         if len(orelse) != 1 or not isinstance(orelse[0], ast.If):
@@ -220,6 +230,13 @@ class GraphBuilder:
         """A class is one box; each method gets its own lane (e.g. "Stack.push")."""
         node = self._add("statement", f"class {s.name}", s.lineno, s.body[0].lineno - 1, col)
         self._connect(preds, node)
+        # Python runs the class body as its own little scope named after the class
+        # (e.g. "Timer"). Point all of its steps at the class box so playback
+        # still highlights something while the class is being set up.
+        class_qualname = self.prefix + s.name
+        self.functions[class_qualname] = {"start": node, "end": node, "lane": self.lane}
+        for ln in range(s.lineno, s.end_lineno + 1):
+            self.line_map.setdefault(f"{class_qualname}:{ln}", node)
         for item in s.body:
             if isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 qualname = f"{self.prefix}{s.name}.{item.name}"

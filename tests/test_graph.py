@@ -113,7 +113,11 @@ def test_methods_and_nested_functions_get_their_own_lanes():
     )
     g = build_graph(code)
     # qualnames match Python's own co_qualname, which is what the tracer reports
-    assert set(g["functions"]) == {"<module>", "Counter.add", "outer", "outer.<locals>.inner"}
+    assert [lane["func"] for lane in g["lanes"]] == ["<module>", "Counter.add", "outer", "outer.<locals>.inner"]
+    # the class body itself has no lane, but is registered so its steps find the class box
+    class_box = node_by_label(g, "class Counter")
+    assert g["functions"]["Counter"] == {"start": class_box["id"], "end": class_box["id"], "lane": 0}
+    assert g["line_map"]["Counter:2"] == class_box["id"]  # `def add` runs inside the class body
 
 
 def test_multiline_statement_maps_every_line():
@@ -121,6 +125,48 @@ def test_multiline_statement_maps_every_line():
     assert g["line_map"]["<module>:1"] == g["line_map"]["<module>:2"]
 
 
+def test_with_header_is_in_line_map():
+    # Regression: the `with` line was left out of line_map, so it never lit up in playback.
+    g = build_graph("with open('f') as fh:\n    x = 1\n")
+    node = node_by_label(g, "with open('f') as fh")
+    assert g["line_map"]["<module>:1"] == node["id"]
+    assert g["line_map"]["<module>:2"] != node["id"]
+
+
 def test_syntax_error_is_raised():
     with pytest.raises(SyntaxError):
         build_graph("if x\n    pass\n")
+
+
+def test_assert_is_a_decision_whose_false_edge_ends_the_lane():
+    code = (
+        "def half(n):\n"
+        "    assert n % 2 == 0, 'odd'\n"
+        "    return n // 2\n"
+        "x = half(4)\n"
+        "assert x == 2\n"
+        "print(x)\n"
+    )
+    g = build_graph(code)
+    for label, func, after in [("assert x == 2", "<module>", "print(x)"), ("assert n % 2 == 0", "half", "return n // 2")]:
+        node = node_by_label(g, label)
+        assert node["type"] == "decision"
+        assert node["func"] == func
+        assert g["line_map"][f'{func}:{node["line"]}'] == node["id"]
+        out = {e["label"]: e for e in edges_from(g, node["id"])}
+        assert set(out) == {"True", "False"}
+        assert out["True"]["to"] == node_by_label(g, after)["id"]
+        assert out["True"]["kind"] == "normal"
+        assert out["False"]["to"] == g["functions"][func]["end"]
+        assert out["False"]["kind"] == "normal"
+
+
+def test_assert_inside_loop_and_multiline_assert():
+    g = build_graph("for i in range(3):\n    assert (i <\n            5)\n")
+    node = node_by_label(g, "assert i < 5")
+    assert node["col"] == 1
+    assert g["line_map"]["<module>:2"] == g["line_map"]["<module>:3"] == node["id"]
+    loop = node_by_label(g, "for i in")
+    out = {e["label"]: e for e in edges_from(g, node["id"])}
+    assert out["True"]["to"] == loop["id"] and out["True"]["kind"] == "back"
+    assert out["False"]["to"] == g["functions"]["<module>"]["end"]
