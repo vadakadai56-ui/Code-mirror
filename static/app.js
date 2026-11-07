@@ -115,7 +115,7 @@ async function visualize() {
     }
     render(data);
   } catch (err) {
-    showMessage("Can't reach the Code Mirror server", " Is `python app.py` still running?");
+    showMessage("Can't reach the Code Mirror server", " Check that python app.py is still running in your terminal, then try again.");
   } finally {
     visualizeBtn.disabled = false;
     visualizeBtn.textContent = "Visualize";
@@ -149,6 +149,8 @@ function render({ graph, trace }) {
 function loadExample(id) {
   const example = examples.find((e) => e.id === id);
   if (!example) return;
+  exampleSelect.value = id;
+  history.replaceState(null, "", `?example=${encodeURIComponent(id)}`); // shareable link
   editor.setValue(example.code);
   visualize();
 }
@@ -173,7 +175,9 @@ async function init() {
     motion.setSpeed(speed);
     $("speed-label").textContent = `${speed}×`;
   });
-  loadExample(examples[0].id);
+  // ?example=factorial in the URL opens that example; otherwise the first one.
+  const wanted = new URLSearchParams(location.search).get("example");
+  loadExample(examples.some((e) => e.id === wanted) ? wanted : examples[0].id);
 }
 
 /** Keyboard shortcuts. Arrow keys etc. only when you're not typing in the editor. */

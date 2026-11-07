@@ -60,3 +60,34 @@ def test_timeout_is_explained(page):
     visualize(page, "total = sum(range(10 ** 12))\n")
     page.wait_for_selector("#message:not([hidden])", timeout=10_000)
     assert "Time limit reached" in page.inner_text("#message")
+
+
+def test_example_deep_link(browser, base_url):
+    from tests.e2e.conftest import make_page
+    page = browser.new_context().new_page()
+    page.goto(f"{base_url}/?example=factorial")
+    page.wait_for_selector(".flowchart .node")
+    assert page.input_value("#example-select") == "factorial"
+    assert "factorial(5)" in page.input_value("#code")
+    page.select_option("#example-select", "fizzbuzz")
+    page.wait_for_function("location.search === '?example=fizzbuzz'")
+    page.context.close()
+
+
+def test_skip_link_and_live_regions(page):
+    page.keyboard.press("Tab")
+    assert page.evaluate("document.activeElement.className") == "skip-link"
+    page.keyboard.press("Enter")
+    assert page.evaluate("document.activeElement.id") == "code"
+    page.click("#btn-play")
+    assert page.get_attribute("#step-label", "aria-live") == "off"
+    page.click("#btn-play")
+    assert page.get_attribute("#step-label", "aria-live") == "polite"
+
+
+def test_phone_width_has_no_sideways_page_scroll(browser, base_url):
+    page = browser.new_context(viewport={"width": 390, "height": 900}).new_page()
+    page.goto(base_url)
+    page.wait_for_selector(".flowchart .node")
+    assert page.evaluate("document.documentElement.scrollWidth") <= 390
+    page.context.close()

@@ -48,10 +48,11 @@ step→node join is still checked.
 If you changed `ALLOWED_MODULES` or the builtins in `tracer.py`, also run
 `check_pipeline.py --leaks`.
 
-## Level 2: pytest (about 4 s)
+## Level 2: pytest
 
 ```bash
-python -m pytest -q                 # everything
+python -m pytest tests/test_graph.py tests/test_tracer.py tests/test_api.py -q   # backend, ~4 s
+python -m pytest -q                    # everything incl. browser tests, ~75 s
 python -m pytest tests/test_graph.py   # stage 1: AST -> graph
 python -m pytest tests/test_tracer.py  # stage 2: tracer, limits, sandbox
 python -m pytest tests/test_api.py     # Flask routes

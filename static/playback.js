@@ -141,6 +141,10 @@ export function createPlayback({ chart, graph, trace, editor, ui, effects = NO_E
     }
   }
 
+  function setLiveRegions(on) {
+    for (const region of [ui.label, ui.stdout]) region.setAttribute("aria-live", on ? "polite" : "off");
+  }
+
   function updateButtons() {
     const atStart = index <= 0;
     const atEnd = index >= steps.length - 1;
@@ -160,12 +164,14 @@ export function createPlayback({ chart, graph, trace, editor, ui, effects = NO_E
       timer = setTimeout(tick, effects.stepSeconds(BASE_STEP_SECONDS) * 1000);
     };
     timer = setTimeout(tick, effects.stepSeconds(BASE_STEP_SECONDS) * 1000);
+    setLiveRegions(false); // don't read out every step while playing
     updateButtons();
   }
 
   function pause() {
     clearTimeout(timer);
     timer = null;
+    setLiveRegions(true);
     updateButtons();
   }
 
