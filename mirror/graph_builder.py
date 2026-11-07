@@ -22,7 +22,7 @@ The frontend turns these hints into pixels; nothing here knows about drawing.
 
 import ast
 
-MAX_LABEL = 42  # longer labels are shortened with "…"
+MAX_LABEL = 36  # longer labels are shortened with "…"
 
 
 def build_graph(source):

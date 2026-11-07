@@ -266,7 +266,8 @@ export function drawFlowchart(container, graph) {
     const label = el("text", { class: "node__label", x: n.w / 2, y: n.h / 2 + 4.5, "text-anchor": "middle" }, body);
     label.textContent = d.label;
     if (d.line) {
-      const num = el("text", { class: "node__line", x: -6, y: n.h / 2 + 4, "text-anchor": "end" }, g);
+      // Line number as a small tag just outside the top-left corner.
+      const num = el("text", { class: "node__line", x: -4, y: -3, "text-anchor": "end" }, g);
       num.textContent = d.line;
     }
     nodes.set(d.id, { el: g, data: d, box: { x: n.x, y: n.y, w: n.w, h: n.h } });

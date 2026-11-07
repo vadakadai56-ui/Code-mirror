@@ -1,1 +1,84 @@
-<!doctype html><title>Code Mirror</title>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Code Mirror</title>
+  <meta name="color-scheme" content="dark">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230d1626'/%3E%3Cpath d='M9 9h14M9 16h8M9 23h14' stroke='%23ffcf5c' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1 class="brand">Code Mirror</h1>
+    <p class="tagline">Paste Python on the left and watch it run on the right.</p>
+    <div class="topbar__actions">
+      <label class="field">
+        <span>Example</span>
+        <select id="example-select" aria-label="Load an example program"></select>
+      </label>
+      <button id="visualize-btn" class="button button--primary" type="button"
+              title="Visualize (Ctrl+Enter)">Visualize</button>
+    </div>
+  </header>
+
+  <main class="workspace">
+    <!-- Left: the code -->
+    <section class="pane pane--code" aria-labelledby="code-heading">
+      <h2 id="code-heading" class="pane__title">Your code</h2>
+      <div class="editor">
+        <div class="editor__gutter" id="gutter" aria-hidden="true"></div>
+        <div class="editor__body">
+          <div class="editor__highlight" id="line-highlight" hidden></div>
+          <textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off"
+                    aria-label="Python code. Press Escape then Tab to leave the editor."></textarea>
+        </div>
+      </div>
+      <div id="message" class="message" role="alert" hidden></div>
+      <section class="console" aria-labelledby="output-heading">
+        <h2 id="output-heading" class="pane__title">Output</h2>
+        <pre id="stdout" class="console__text" aria-live="polite"></pre>
+      </section>
+    </section>
+
+    <!-- Right: the flowchart, playback and variables -->
+    <section class="pane pane--chart" aria-labelledby="chart-heading">
+      <h2 id="chart-heading" class="pane__title">Flowchart</h2>
+      <div class="chart" id="chart">
+        <p class="chart__empty">Choose an example or paste your own code, then press <strong>Visualize</strong>.</p>
+      </div>
+
+      <div class="playback" id="playback" hidden>
+        <div class="playback__buttons" role="group" aria-label="Playback">
+          <button class="button button--icon" id="btn-first" type="button" aria-label="Go to first step" title="First step (Home)">⏮</button>
+          <button class="button button--icon" id="btn-back" type="button" aria-label="Step back" title="Step back (←)">◀</button>
+          <button class="button button--icon button--play" id="btn-play" type="button" aria-label="Play" title="Play / pause (Space)">▶</button>
+          <button class="button button--icon" id="btn-forward" type="button" aria-label="Step forward" title="Step forward (→)">▶▏</button>
+          <button class="button button--icon" id="btn-last" type="button" aria-label="Go to last step" title="Last step (End)">⏭</button>
+        </div>
+        <label class="playback__scrub">
+          <span class="visually-hidden">Step</span>
+          <input type="range" id="step-slider" min="0" max="0" value="0">
+        </label>
+        <output id="step-label" class="playback__count" aria-live="polite">Step 0 of 0</output>
+        <label class="playback__speed">
+          <span>Speed</span>
+          <input type="range" id="speed-slider" min="0.25" max="4" step="0.25" value="1">
+          <output id="speed-label">1×</output>
+        </label>
+      </div>
+
+      <section class="variables" id="variables" aria-labelledby="vars-heading" hidden>
+        <h2 id="vars-heading" class="pane__title">Variables <span id="vars-scope" class="variables__scope"></span></h2>
+        <p id="call-stack" class="variables__stack"></p>
+        <table class="variables__table">
+          <thead><tr><th scope="col">Name</th><th scope="col">Value</th></tr></thead>
+          <tbody id="vars-body"></tbody>
+        </table>
+      </section>
+    </section>
+  </main>
+
+  <script type="module" src="/static/app.js"></script>
+</body>
+</html>
