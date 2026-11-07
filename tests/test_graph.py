@@ -170,3 +170,57 @@ def test_assert_inside_loop_and_multiline_assert():
     out = {e["label"]: e for e in edges_from(g, node["id"])}
     assert out["True"]["to"] == loop["id"] and out["True"]["kind"] == "back"
     assert out["False"]["to"] == g["functions"]["<module>"]["end"]
+
+
+MATCH_CODE = '''def describe(value):
+    match value:
+        case 0:
+            return "zero"
+        case int(n) if n < 0:
+            return "negative"
+        case [x, y]:
+            return "pair"
+        case _:
+            return "other"
+'''
+
+
+def test_match_cases_form_a_decision_chain():
+    g = build_graph(MATCH_CODE)
+    match = node_by_label(g, "match value")
+    cases = [n for n in g["nodes"] if n["label"].startswith("case ")]
+    assert [c["label"] for c in cases] == ["case 0", "case int(n) if n < 0", "case [x, y]", "case _"]
+    assert all(c["type"] == "decision" and c["col"] == match["col"] + 1 for c in cases)
+    assert [e["to"] for e in edges_from(g, match["id"])] == [cases[0]["id"]]
+    # each case's False edge tries the next case
+    for a, b in zip(cases, cases[1:]):
+        assert {"from": a["id"], "to": b["id"], "label": "False", "kind": "normal"} in g["edges"]
+    # `case _` always matches, so it has only a True edge
+    assert [e["label"] for e in edges_from(g, cases[-1]["id"])] == ["True"]
+    # bodies are indented under their case
+    assert node_by_label(g, 'return "zero"')["col"] == match["col"] + 2
+
+
+def test_match_without_wildcard_falls_through():
+    g = build_graph("match x:\n    case 1:\n        y = 'one'\n    case 2 | 3:\n        y = 'few'\nprint('after')\n")
+    last_case = node_by_label(g, "case 2 | 3")
+    after = node_by_label(g, "print('after')")
+    assert {"from": last_case["id"], "to": after["id"], "label": "False", "kind": "normal"} in g["edges"]
+    assert {"from": node_by_label(g, "y = 'one'")["id"], "to": after["id"], "label": None, "kind": "normal"} in g["edges"]
+
+
+def test_capture_pattern_and_or_with_wildcard_always_match():
+    for pattern in ["other", "1 | _"]:
+        g = build_graph(f"match x:\n    case {pattern}:\n        y = 1\nz = 2\n")
+        case = node_by_label(g, f"case {pattern}")
+        assert [e["label"] for e in edges_from(g, case["id"])] == ["True"]
+    # a guard makes even `case _` able to fail
+    g = build_graph("match x:\n    case _ if x > 0:\n        y = 1\nz = 2\n")
+    assert sorted(e["label"] for e in edges_from(g, node_by_label(g, "case _ if")["id"])) == ["False", "True"]
+
+
+def test_multiline_case_pattern_maps_all_its_lines():
+    g = build_graph("match p:\n    case [\n        a,\n        b,\n    ]:\n        y = a\n")
+    case = node_by_label(g, "case [a, b]")
+    assert all(g["line_map"][f"<module>:{ln}"] == case["id"] for ln in (2, 3, 4, 5))
+    assert g["line_map"]["<module>:6"] != case["id"]

@@ -43,18 +43,25 @@ code ──► graph_builder.py (reads AST, never runs code) ──► graph JSO
 
 | Field | Meaning |
 |---|---|
-| `type` | `start`, `statement`, `decision` (if/elif/assert), `loop` (for/while), `call` (statement that calls a user function), `return`, `end` |
+| `type` | `start`, `statement`, `decision` (if/elif/assert/case), `loop` (for/while), `call` (statement that calls a user function), `return`, `end` |
 | `func` | Python's `co_qualname` for the scope: `<module>`, `fib`, `Stack.push`, `outer.<locals>.inner` |
 | `lane` | one column per scope; lane 0 is the main program |
 | `row` | order inside the lane, 0..N-1 with no gaps; `end` is always last |
 | `col` | indentation depth, so the chart has the same shape as the code |
 | `calls` | names of user-defined functions called on this line |
-| edge `label` | `True`/`False` (if, while, assert), `next`/`done` (for), `error` (try→except), or `null` |
+| edge `label` | `True`/`False` (if, while, assert, case), `next`/`done` (for), `error` (try→except), or `null` |
 | edge `kind` | `normal` (to a later row), `back` (to the same or an earlier row, e.g. loop repeat), `call` (dashed, to another lane's start) |
 
 Rules that tests rely on: `elif` sits at the same `col` as its `if`; `break` goes to
 whatever follows the loop; `continue` and the end of a loop body get `back` edges to
 the loop node; `return` connects to its lane's `end` node.
+`match x:` is a `statement` node (`match x`) followed by one `decision` per case at
+`col + 1` (label `case <pattern>` plus ` if <guard>`), with bodies at `col + 2`. Case
+False edges chain to the next case. The last case's False edge goes to whatever
+follows the match (no case matched). A case that always matches (`_`, a bare
+capture name, or an `|` containing one, *without* a guard) has no False edge.
+Python's ast gives `match_case` no line numbers, so a case uses `case.pattern.lineno`.
+Python reports a line event for each case it tests, so the cases light up one by one.
 `assert cond` is a `decision` labelled `assert <cond>` (the message is left out): its
 `True` edge goes to the next statement, its `False` edge goes to its lane's `end` node
 (the program stops there with `AssertionError`, which the trace reports as a `runtime` error).
@@ -112,9 +119,10 @@ Join rules that are easy to break:
 - A class body runs as its own scope named after the class (e.g. `Timer`). It has no
   lane. Instead, `functions["Timer"]` points start and end at the `class Timer` box,
   and `line_map["Timer:<line>"]` covers the whole class, so its steps light up that box.
-- A step that legitimately has no node (for example inside a `match` case body,
-  which is drawn as one box) highlights nothing. That's allowed, but the pipeline check
-  reports it, so add a node or a mapping when you add a statement type.
+- A step that has no node highlights nothing. That's allowed (e.g. `async` statements
+  are drawn as one box), but the pipeline check reports it, so add a node or a mapping
+  when you add a statement type. Check which lines Python actually reports first:
+  `check_pipeline.py -v prog.py` shows each step and its node.
 
 ## Safety layers (tracer.py / runner.py)
 

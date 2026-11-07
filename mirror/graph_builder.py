@@ -11,7 +11,7 @@ it. The result is a plain dict that Flask sends to the browser as JSON:
       "line_map": { "qualname:line": node_id }, # how a trace step finds its node
     }
 
-Node types: start, statement, decision (if/elif/assert), loop, call, return, end.
+Node types: start, statement, decision (if/elif/assert/case), loop, call, return, end.
 Edge kinds: "normal" (flows down), "back" (jumps up, e.g. a loop repeating),
             "call" (from a line that calls one of your functions to that function's start).
 
@@ -155,6 +155,8 @@ class GraphBuilder:
             return self._assert(s, preds, col)
         if isinstance(s, ast.Try):
             return self._try(s, preds, col)
+        if isinstance(s, ast.Match):
+            return self._match(s, preds, col)
         if isinstance(s, (ast.With, ast.AsyncWith)):
             items = ", ".join(ast.unparse(i) for i in s.items)
             node = self._add("statement", f"with {items}", s.lineno, s.body[0].lineno - 1, col, calls_in=s.items)
@@ -162,7 +164,7 @@ class GraphBuilder:
             return self._block(s.body, [(node, None)], col + 1)
 
         if hasattr(s, "body"):
-            # Anything else with a body (e.g. `match`): one box for the whole thing.
+            # Anything else with a body (e.g. `async` variants we don't expand): one box.
             node = self._add("statement", self._source(s), s.lineno, s.end_lineno, col, calls_in=s)
         else:
             # A simple statement: assignment, print(...), x += 1, ...
@@ -242,6 +244,43 @@ class GraphBuilder:
                 qualname = f"{self.prefix}{s.name}.{item.name}"
                 self.todo.append((qualname, item, qualname + ".<locals>."))
         return [(node, None)]
+
+    def _match(self, s, preds, col):
+        """`match value:` then one decision per `case`, tried top to bottom.
+
+        Python reports the `match` line, then each `case` line it tests, so each case
+        is a decision: True runs its body, False tries the next case. A case that
+        always matches (`case _:` or `case name:` without a guard) has no False edge.
+        """
+        subject = ast.unparse(s.subject)
+        node = self._add("statement", f"match {subject}", s.lineno, s.cases[0].pattern.lineno - 1, col,
+                         calls_in=s.subject)
+        self._connect(preds, node)
+        exits = []
+        trying = [(node, None)]  # edges that lead to the next case to test
+        for case in s.cases:
+            pattern = ast.unparse(case.pattern)
+            label = f"case {pattern}" + (f" if {ast.unparse(case.guard)}" if case.guard else "")
+            first_line = case.pattern.lineno
+            # Python's ast gives match_case no line numbers; the pattern starts on the `case` line.
+            header_end = case.body[0].lineno - 1
+            calls = [case.guard] if case.guard else []
+            c = self._add("decision", label, first_line, max(first_line, header_end), col + 1, calls_in=calls)
+            self._connect(trying, c)
+            exits += self._block(case.body, [(c, "True")], col + 2)
+            if case.guard is None and self._always_matches(case.pattern):
+                trying = []
+                break  # later cases can never run
+            trying = [(c, "False")]
+        return exits + trying  # no case matched: carry on after the match
+
+    def _always_matches(self, pattern):
+        """`_`, a bare name, or an `|` containing one of those."""
+        if isinstance(pattern, ast.MatchAs):
+            return pattern.pattern is None
+        if isinstance(pattern, ast.MatchOr):
+            return any(self._always_matches(p) for p in pattern.patterns)
+        return False
 
     def _try(self, s, preds, col):
         node = self._add("statement", "try", s.lineno, s.body[0].lineno - 1, col)

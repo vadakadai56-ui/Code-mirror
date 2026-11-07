@@ -201,3 +201,25 @@ def test_classes_and_methods_trace():
     assert trace["error"] is None and trace["stdout"] == "3\n"
     funcs = {s["func"] for s in trace["steps"]}
     assert {"Box.__init__", "Box.get"} <= funcs
+
+
+def test_match_steps_map_to_case_nodes():
+    code = (
+        "def describe(value):\n"
+        "    match value:\n"
+        "        case 0:\n"
+        "            return 'zero'\n"
+        "        case [x, y]:\n"
+        "            return 'pair'\n"
+        "        case _:\n"
+        "            return 'other'\n"
+        "for v in [0, [1, 2], 7.5]:\n"
+        "    print(describe(v))\n"
+    )
+    graph, trace = build_graph(code), run_code(code)
+    assert trace["error"] is None and trace["stdout"] == "zero\npair\nother\n"
+    assert all(node_for_step(graph, s) for s in trace["steps"])
+    labels = {n["id"]: n["label"] for n in graph["nodes"]}
+    visited = [labels[node_for_step(graph, s)] for s in trace["steps"] if s["func"] == "describe"]
+    # for 7.5 every case is tried in order before `case _` matches
+    assert visited[-6:] == ["match value", "case 0", "case [x, y]", "case _", "return 'other'", "end of describe()"]

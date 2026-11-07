@@ -46,8 +46,8 @@ You can link straight to an example: `http://127.0.0.1:5000/?example=factorial`.
 
 ## What it can show
 
-`if` / `elif` / `else`, `for` and `while` loops (including `break`, `continue` and
-`else:`), functions and calls, recursion (with the call stack), `return`, `assert`,
+`if` / `elif` / `else`, `match` / `case` (each case is tried in order, with guards),
+`for` and `while` loops (including `break`, `continue` and `else:`), functions and calls, recursion (with the call stack), `return`, `assert`,
 classes and methods, `try` / `except` and `with`.
 
 ## Limits and safety

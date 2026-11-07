@@ -155,3 +155,27 @@ def test_runtime_error_marks_the_failing_node(page):
     assert page.locator(".node.is-error").count() == 1
     assert page.locator("#gutter .is-error").inner_text() == "3"
     assert "ZeroDivisionError" in page.inner_text("#message")
+
+
+def test_match_playback_follows_the_cases(page):
+    code = (
+        "def describe(value):\n"
+        "    match value:\n"
+        "        case 0:\n"
+        "            return 'zero'\n"
+        "        case [x, y]:\n"
+        "            return 'pair'\n"
+        "        case _:\n"
+        "            return 'other'\n"
+        "for v in [0, [1, 2], 7.5]:\n"
+        "    print(describe(v))\n"
+    )
+    visualize(page, code)
+    graph, trace = build_graph(code), run_code(code)
+    assert page.locator(".flowchart .node--decision").count() == 3  # the three cases
+    for i, step in enumerate(trace["steps"]):
+        if i:
+            page.click("#btn-forward")
+        assert active_node(page) == node_for_step(graph, step), f"step {i}"
+    assert page.inner_text("#stdout").strip() == "zero\npair\nother"
+    assert page.errors == []
