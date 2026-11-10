@@ -92,6 +92,13 @@ Notes:
   the cloud dev container), read the type definitions in the npm package:
   `npm pack motion@14.6.0`, and look at `motion-dom/dist/index.d.ts` after installing.
 
+## The ad page is separate
+
+`ad/index.html` is a standalone marketing page, not part of the app. It imports the same
+pinned Motion version in its own inline script and keeps its own `dur()` helper, so Rule 1
+(only `static/motion.js` animates) covers the app in `static/` only. If you bump the Motion
+version, bump it in the ad too.
+
 ## Gotchas learned while building it
 
 - **Motion applies values on its next animation frame.** Reading `style.transform`

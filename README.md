@@ -90,6 +90,14 @@ your code ──► mirror/graph_builder.py  (reads the code with `ast`, never r
 
 The exact JSON formats are documented in `.claude/skills/code-mirror-architecture/SKILL.md`.
 
+## Motion ad
+
+`ad/index.html` is a 20-second looping ad for Code Mirror, animated with
+[Motion](https://motion.dev) 14.6.0 (the same pinned version as the app). It is a single
+standalone file: open it in a browser, no server needed. It plays on a 1920×1080 stage
+scaled to the window, so you can screen-record it full-screen for a video. With reduced
+motion turned on, or without internet access, it shows the end frame as a still poster.
+
 ## Tests
 
 ```bash
