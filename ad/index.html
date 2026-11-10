@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Code Mirror Motion Ad</title>
+<meta name="description" content="A 20-second animated ad for Code Mirror, built with Motion (motion.dev).">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a fixed 1920×1080 "blueprint at night" stage, scaled to fit the window.
+   Left column = headline + code; right = flowchart + variables. The yellow signal is the only bright colour. */
+:root {
+  --bg: #0d1626;
+  --panel: #132036;
+  --panel-raised: #1a2a43;
+  --rule: #26395a;
+  --text: #dbe4f0;
+  --muted: #8b9cb6;
+  --signal: #ffcf5c;
+  --signal-ink: #1b1606;
+  --n-statement: #7393c0; --n-statement-fill: #172740;
+  --n-loop: #52c4b6;      --n-loop-fill: #12302f;
+  --n-return: #f08088;    --n-return-fill: #2e1a24;
+  --n-terminal: #8b9cb6;  --n-terminal-fill: #1a2a43;
+  --edge: #4b6286;
+  --kw: #c9a7ff; --fn: #7fd1ff; --num: #f2b27a; --str: #9ad99a;
+  --display: "Familjen Grotesk", "Helvetica Neue", Arial, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--text); overflow: hidden; font-family: var(--display); }
+
+.stage {
+  position: absolute; left: 50%; top: 50%; width: 1920px; height: 1080px;
+  transform-origin: center; transform: translate(-50%, -50%);
+  background:
+    radial-gradient(circle at 1px 1px, rgba(115,147,192,.13) 1px, transparent 0) 0 0 / 40px 40px,
+    var(--bg);
+  overflow: hidden;
+  font-variant-ligatures: none;
+}
+
+/* ---------- headline */
+.headline {
+  position: absolute; left: 120px; top: 120px; width: 720px;
+  margin: 0; font-size: 84px; line-height: 1.02; font-weight: 700; letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+.headline .w { display: inline-block; white-space: pre; }
+
+/* ---------- code card */
+.code {
+  position: absolute; left: 120px; top: 400px; width: 720px;
+  background: var(--panel); border: 1px solid var(--rule); border-radius: 14px; overflow: hidden;
+  font: 24px/36px var(--mono);
+}
+.code__file { padding: 14px 24px; font-size: 18px; color: var(--muted); border-bottom: 1px solid var(--rule); }
+.code__body { position: relative; padding: 16px 0; }
+.code__hl {
+  position: absolute; left: 0; right: 0; top: 16px; height: 36px;
+  background: rgba(255,207,92,.14); box-shadow: inset 4px 0 0 var(--signal); opacity: 0;
+}
+.line { position: relative; display: flex; white-space: pre; height: 36px; }
+.line__no { width: 64px; padding-right: 20px; text-align: right; color: #4f6587; flex: none; }
+.line.is-active .line__no { color: var(--signal); }
+.k { color: var(--kw); } .f { color: var(--fn); } .n { color: var(--num); } .s { color: var(--str); }
+.code__out {
+  border-top: 1px solid var(--rule); padding: 12px 24px; font-size: 22px; color: var(--muted); min-height: 60px;
+}
+.code__out b { color: var(--signal); font-weight: 600; }
+
+/* ---------- flowchart */
+.chart { position: absolute; left: 900px; top: 100px; width: 640px; height: 860px; overflow: visible; }
+.chart text { font: 22px var(--mono); fill: var(--text); }
+.chart .edge-label { font-size: 17px; fill: var(--muted); }
+.edge { fill: none; stroke: var(--edge); stroke-width: 2.5; }
+.node__body { transform-box: fill-box; transform-origin: center; }
+.node__shape { stroke-width: 2.5; }
+.node--statement .node__shape { stroke: var(--n-statement); fill: var(--n-statement-fill); }
+.node--loop .node__shape { stroke: var(--n-loop); fill: var(--n-loop-fill); }
+.node--return .node__shape { stroke: var(--n-return); fill: var(--n-return-fill); }
+.node--terminal .node__shape { stroke: var(--n-terminal); fill: var(--n-terminal-fill); }
+.node.is-active .node__shape { stroke: var(--signal); fill: #3a3218; stroke-width: 3.5; }
+.dot { fill: var(--signal); filter: drop-shadow(0 0 10px rgba(255,207,92,.9)); }
+
+/* ---------- variables */
+.vars {
+  position: absolute; left: 1580px; top: 330px; width: 270px;
+  background: var(--panel); border: 1px solid var(--rule); border-radius: 14px;
+  font: 22px/1 var(--mono); padding: 18px 0 12px;
+}
+.vars__title { font: 700 24px var(--display); padding: 0 22px 14px; display: flex; flex-direction: column; gap: 6px; }
+.vars__step { font: 16px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.var { display: flex; justify-content: space-between; padding: 10px 22px; }
+.var__name { color: var(--muted); }
+.var__val { font-variant-numeric: tabular-nums; display: inline-block; }
+
+/* ---------- end lockup */
+.lockup { position: absolute; left: 120px; top: 360px; width: 780px; }
+.lockup__mark { display: flex; align-items: center; gap: 28px; }
+.lockup__mark svg { width: 110px; height: 110px; flex: none; }
+.lockup__name { margin: 0; white-space: nowrap; font-size: 116px; line-height: .95; letter-spacing: -0.04em; font-weight: 700; }
+.lockup__tag { margin: 44px 0 0; font-size: 52px; line-height: 1.1; font-weight: 500; color: var(--text); letter-spacing: -0.015em; }
+.lockup__cmd {
+  display: inline-flex; gap: 16px; margin-top: 52px; padding: 18px 28px; border-radius: 12px;
+  background: var(--signal); color: var(--signal-ink); font: 600 28px var(--mono);
+}
+.lockup__cmd span { opacity: .55; }
+.lockup__note { margin: 22px 0 0; font-size: 24px; color: var(--muted); font-weight: 500; }
+
+/* ---------- replay */
+.replay {
+  position: fixed; z-index: 5;
+  right: calc(16px + env(safe-area-inset-right, 0px)); bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  font: 600 15px var(--display); color: var(--text); background: var(--panel-raised);
+  border: 1px solid var(--rule); border-radius: 999px; padding: 9px 18px; cursor: pointer;
+}
+.replay:hover { border-color: var(--signal); }
+.replay:focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<div class="stage" id="stage" role="img" aria-label="Animated ad: Python code is drawn as a flowchart, then a yellow dot runs through it while the variables update. Ends on: Code Mirror. Paste Python. Watch it run."></div>
+<button class="replay" id="replay" type="button">Replay</button>
+
+<script type="module">
+/* All timings are in seconds and go through dur(), so reduced motion can zero them in one place. */
+const stage = document.getElementById("stage");
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const dur = (s) => (reduce ? 0 : s);
+
+let animate = null, stagger = null;
+try {
+  ({ animate, stagger } = await import("https://cdn.jsdelivr.net/npm/motion@14.6.0/+esm"));
+} catch { /* No CDN: show the end frame as a still poster. */ }
+
+/* ------------------------------------------------------------------ content */
+const CODE = [
+  `<span class="k">def</span> <span class="f">fibonacci</span>(n):`,
+  `    a, b = <span class="n">0</span>, <span class="n">1</span>`,
+  `    count = <span class="n">0</span>`,
+  `    <span class="k">while</span> count &lt; n:`,
+  `        a, b = b, a + b`,
+  `        count += <span class="n">1</span>`,
+  `    <span class="k">return</span> a`,
+  ``,
+  `result = <span class="f">fibonacci</span>(<span class="n">8</span>)`,
+  `<span class="f">print</span>(<span class="s">"fibonacci(8) ="</span>, result)`,
+];
+
+const CX = 320;
+const NODES = {
+  start: { y: 40,  label: "fibonacci(n)",    kind: "terminal", shape: "pill", line: 0 },
+  n1:    { y: 130, label: "a, b = 0, 1",     kind: "statement", line: 1 },
+  n2:    { y: 220, label: "count = 0",       kind: "statement", line: 2 },
+  n3:    { y: 335, label: "count < n",       kind: "loop", shape: "diamond", line: 3 },
+  n4:    { y: 460, label: "a, b = b, a + b", kind: "statement", line: 4 },
+  n5:    { y: 550, label: "count += 1",      kind: "statement", line: 5 },
+  n6:    { y: 680, label: "return a",        kind: "return", line: 6 },
+  end:   { y: 780, label: "done",            kind: "terminal", shape: "pill", line: 9 },
+};
+const EDGES = {
+  e0: "M320 64 V100",  e1: "M320 158 V190", e2: "M320 248 V278",
+  e3: "M320 390 V430", e4: "M320 488 V520",
+  e5: "M460 550 H575 V335 H452",
+  e6: "M190 335 H70 V680 H178",
+  e7: "M320 708 V754",
+};
+const HEADLINES = ["You wrote the code.", "Code Mirror draws its shape.", "Then runs it, one step at a time."];
+
+/* The run, step by step: [node, edge taken to reach it, variable changes]. */
+function buildSteps() {
+  const steps = [["start", null, { n: 8 }], ["n1", "e0", { a: 0, b: 1 }], ["n2", "e1", { count: 0 }], ["n3", "e2", {}]];
+  let a = 0, b = 1;
+  for (let c = 1; c <= 8; c++) {
+    [a, b] = [b, a + b];
+    steps.push(["n4", "e3", { a, b }], ["n5", "e4", { count: c }], ["n3", "e5", {}]);
+  }
+  steps.push(["n6", "e6", {}], ["end", "e7", {}]);
+  return steps;
+}
+const STEPS = buildSteps();
+
+/* ------------------------------------------------------------------ DOM */
+const svgNS = "http://www.w3.org/2000/svg";
+function nodeSVG(id, n) {
+  let shape;
+  if (n.shape === "diamond") shape = `<polygon class="node__shape" points="${CX},${n.y - 55} ${CX + 130},${n.y} ${CX},${n.y + 55} ${CX - 130},${n.y}"/>`;
+  else if (n.shape === "pill") shape = `<rect class="node__shape" x="${CX - 120}" y="${n.y - 24}" width="240" height="48" rx="24"/>`;
+  else shape = `<rect class="node__shape" x="${CX - 140}" y="${n.y - 28}" width="280" height="56" rx="8"/>`;
+  return `<g class="node node--${n.kind}" data-id="${id}"><g class="node__body">${shape}
+    <text x="${CX}" y="${n.y}" text-anchor="middle" dominant-baseline="central">${n.label.replace("<", "&lt;")}</text></g></g>`;
+}
+
+function build() {
+  stage.innerHTML = `
+    <h1 class="headline" id="headline" aria-hidden="true"></h1>
+    <div class="code" id="code" aria-hidden="true">
+      <div class="code__file">fibonacci.py</div>
+      <div class="code__body">
+        <div class="code__hl" id="hl"></div>
+        ${CODE.map((c, i) => `<div class="line"><span class="line__no">${i + 1}</span><span class="line__code">${c}</span></div>`).join("")}
+      </div>
+      <div class="code__out" id="out"></div>
+    </div>
+    <svg class="chart" id="chart" viewBox="0 0 640 860" aria-hidden="true">
+      <defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0 0 L10 5 L0 10 z" fill="#4b6286"/></marker></defs>
+      ${Object.entries(EDGES).map(([id, d]) => `<path class="edge" data-id="${id}" d="${d}" pathLength="1"/>`).join("")}
+      <text class="edge-label" x="334" y="414">yes</text>
+      <text class="edge-label" x="128" y="322">no</text>
+      ${Object.entries(NODES).map(([id, n]) => nodeSVG(id, n)).join("")}
+      <circle class="dot" id="dot" r="9" cx="${CX}" cy="40" opacity="0"/>
+    </svg>
+    <div class="vars" id="vars" aria-hidden="true">
+      <div class="vars__title">Variables <span class="vars__step" id="stepno"></span></div>
+      ${["n", "a", "b", "count"].map((v) => `<div class="var" data-var="${v}"><span class="var__name">${v}</span><span class="var__val">–</span></div>`).join("")}
+    </div>
+    <div class="lockup" id="lockup" aria-hidden="true">
+      <div class="lockup__mark">
+        <svg viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#1a2a43"/><path d="M9 9h14M9 16h8M9 23h14" stroke="#ffcf5c" stroke-width="3" stroke-linecap="round"/></svg>
+        <p class="lockup__name">Code Mirror</p>
+      </div>
+      <p class="lockup__tag">Paste Python. Watch it run.</p>
+      <div class="lockup__cmd"><span>$</span>python app.py</div>
+      <p class="lockup__note">Free, open source, and it runs on your own machine.</p>
+    </div>`;
+  const $ = (s) => stage.querySelector(s);
+  return {
+    headline: $("#headline"), code: $("#code"), hl: $("#hl"), out: $("#out"), chart: $("#chart"),
+    dot: $("#dot"), vars: $("#vars"), stepno: $("#stepno"), lockup: $("#lockup"),
+    lines: [...stage.querySelectorAll(".line")],
+    nodes: Object.fromEntries([...stage.querySelectorAll(".node")].map((g) => [g.dataset.id, g])),
+    edges: Object.fromEntries([...stage.querySelectorAll(".edge")].map((p) => [p.dataset.id, p])),
+    varCells: Object.fromEntries([...stage.querySelectorAll(".var")].map((r) => [r.dataset.var, r])),
+  };
+}
+
+/* ------------------------------------------------------------------ helpers */
+const live = new Set();
+let runId = 0;
+function A(...args) {
+  const c = animate(...args);
+  live.add(c);
+  Promise.resolve(c).then(() => live.delete(c), () => live.delete(c));
+  return c;
+}
+const wait = (s) => A(0, 1, { duration: dur(s) });
+
+function splitWords(el, text) {
+  el.innerHTML = text.split(" ").map((w) => `<span class="w">${w} </span>`).join("");
+  return [...el.querySelectorAll(".w")];
+}
+async function showHeadline(ui, text, first = false) {
+  if (!first) {
+    await A(ui.headline.querySelectorAll(".w"), { opacity: 0, y: -24 }, { duration: dur(0.28), delay: stagger(dur(0.025)), ease: "easeIn" });
+  }
+  const words = splitWords(ui.headline, text);
+  return A(words, { opacity: [0, 1], y: [48, 0] }, { duration: dur(0.6), delay: stagger(dur(0.06)), ease: [0.16, 1, 0.3, 1] });
+}
+function moveHighlight(ui, line, s) {
+  ui.lines.forEach((l, i) => l.classList.toggle("is-active", i === line));
+  A(ui.hl, { y: line * 36, opacity: 1 }, { duration: dur(s), ease: [0.33, 1, 0.68, 1] });
+}
+function setActive(ui, id) {
+  Object.entries(ui.nodes).forEach(([k, g]) => g.classList.toggle("is-active", k === id));
+  A(ui.nodes[id].querySelector(".node__body"), { scale: [1.09, 1] }, { type: "spring", bounce: 0.45, visualDuration: dur(0.3) });
+}
+function setVar(ui, name, value) {
+  const row = ui.varCells[name], cell = row.querySelector(".var__val");
+  cell.textContent = value;
+  A(cell, { x: [-10, 0], opacity: [0, 1] }, { duration: dur(0.22) });
+  A(row, { backgroundColor: ["rgba(255,207,92,0.28)", "rgba(255,207,92,0)"] }, { duration: dur(0.7) });
+}
+function travel(ui, path, s) {
+  const len = path.getTotalLength();
+  ui.dot.setAttribute("opacity", "1");
+  return A(0, 1, {
+    duration: dur(s), ease: "easeInOut",
+    onUpdate: (p) => { const pt = path.getPointAtLength(p * len); ui.dot.setAttribute("cx", pt.x); ui.dot.setAttribute("cy", pt.y); },
+  });
+}
+
+/* ------------------------------------------------------------------ the ad */
+function hideForStart(ui) {
+  for (const el of [ui.code, ui.vars, ui.lockup, ...ui.lines]) el.style.opacity = 0;
+  Object.values(ui.nodes).forEach((g) => (g.style.opacity = 0));
+  Object.values(ui.edges).forEach((p) => { p.style.strokeDasharray = "1"; p.style.strokeDashoffset = "1"; });
+  stage.querySelectorAll(".edge-label").forEach((t) => (t.style.opacity = 0));
+}
+
+async function play(id) {
+  const ui = build();
+  hideForStart(ui);
+  const alive = () => id === runId;
+
+  /* Scene 1: the code types itself in. */
+  showHeadline(ui, HEADLINES[0], true);
+  await wait(0.5); if (!alive()) return;
+  A(ui.code, { opacity: [0, 1], y: [30, 0] }, { duration: dur(0.6), ease: [0.16, 1, 0.3, 1] });
+  await A(ui.lines, { opacity: [0, 1], clipPath: ["inset(0 100% 0 0)", "inset(0 0% 0 0)"] },
+          { duration: dur(0.32), delay: stagger(dur(0.14), { startDelay: dur(0.3) }), ease: "linear" });
+  await wait(0.9); if (!alive()) return;
+
+  /* Scene 2: each line becomes a box, and the arrows draw between them. */
+  await showHeadline(ui, HEADLINES[1]); if (!alive()) return;
+  const order = ["start", "n1", "n2", "n3", "n4", "n5", "n6", "end"];
+  const edgeAfter = { start: "e0", n1: "e1", n2: "e2", n3: "e3", n4: "e4", n5: "e5", n6: "e7" };
+  for (const nid of order) {
+    moveHighlight(ui, NODES[nid].line, 0.18);
+    A(ui.nodes[nid], { opacity: [0, 1] }, { duration: dur(0.25) });
+    A(ui.nodes[nid].querySelector(".node__body"), { scale: [0.8, 1] }, { type: "spring", bounce: 0.35, visualDuration: dur(0.35) });
+    await wait(0.16); if (!alive()) return;
+    const e = edgeAfter[nid];
+    if (e) A(ui.edges[e], { strokeDashoffset: [1, 0] }, { duration: dur(e === "e5" ? 0.5 : 0.22), ease: "easeOut" })
+             .then(() => ui.edges[e].setAttribute("marker-end", "url(#arrow)"));
+  }
+  await A(ui.edges.e6, { strokeDashoffset: [1, 0] }, { duration: dur(0.5), ease: "easeOut" });
+  ui.edges.e6.setAttribute("marker-end", "url(#arrow)");
+  A(stage.querySelectorAll(".edge-label"), { opacity: [0, 1] }, { duration: dur(0.3) });
+  A(ui.hl, { opacity: 0 }, { duration: dur(0.2) });
+  ui.lines.forEach((l) => l.classList.remove("is-active"));
+  await wait(0.5); if (!alive()) return;
+
+  /* Scene 3: run it. The dot follows the arrow that was taken; the run speeds up as the loop repeats. */
+  showHeadline(ui, HEADLINES[2]);
+  A(ui.vars, { opacity: [0, 1], x: [30, 0] }, { duration: dur(0.5), ease: [0.16, 1, 0.3, 1] });
+  await wait(0.5); if (!alive()) return;
+  for (let i = 0; i < STEPS.length; i++) {
+    const [nid, edge, changes] = STEPS[i];
+    const stepS = i < 8 ? 0.55 : i < STEPS.length - 2 ? Math.max(0.13, 0.55 - (i - 8) * 0.05) : 0.5;
+    if (edge) { await travel(ui, ui.edges[edge], stepS * 0.55); if (!alive()) return; }
+    else { ui.dot.setAttribute("cy", NODES.start.y); ui.dot.setAttribute("opacity", "1"); }
+    setActive(ui, nid);
+    moveHighlight(ui, NODES[nid].line, stepS * 0.35);
+    ui.stepno.textContent = `step ${i + 1} of ${STEPS.length}`;
+    for (const [k, v] of Object.entries(changes)) setVar(ui, k, v);
+    if (nid === "end") ui.out.innerHTML = `› fibonacci(8) = <b>21</b>`;
+    await wait(stepS * 0.45); if (!alive()) return;
+  }
+  A(ui.out, { opacity: [0, 1], x: [-10, 0] }, { duration: dur(0.3) });
+  await wait(1.4); if (!alive()) return;
+
+  /* Scene 4: the name. The chart stays on screen as the product shot. */
+  A(ui.headline, { opacity: 0, y: -30 }, { duration: dur(0.35), ease: "easeIn" });
+  await A(ui.code, { opacity: 0, y: 40 }, { duration: dur(0.4), ease: "easeIn" }); if (!alive()) return;
+  ui.dot.setAttribute("opacity", "0");
+  A(ui.lockup, { opacity: [0, 1] }, { duration: dur(0.01) });
+  A(ui.lockup.children, { opacity: [0, 1], y: [40, 0] }, { duration: dur(0.7), delay: stagger(dur(0.18)), ease: [0.16, 1, 0.3, 1] });
+  await wait(5); if (!alive()) return;
+  replay();
+}
+
+/* Still poster: the end frame, for reduced motion or when Motion can't load. */
+function poster() {
+  const ui = build();
+  ui.headline.hidden = true; ui.code.style.opacity = 0;
+  Object.values(ui.edges).forEach((p) => p.setAttribute("marker-end", "url(#arrow)"));
+  ui.nodes.end.classList.add("is-active");
+  Object.entries({ n: 8, a: 21, b: 34, count: 8 }).forEach(([k, v]) => (ui.varCells[k].querySelector(".var__val").textContent = v));
+  ui.stepno.textContent = `step ${STEPS.length} of ${STEPS.length}`;
+}
+
+function replay() {
+  runId++;
+  for (const c of live) c.stop();
+  live.clear();
+  if (!animate || reduce) poster(); else play(runId);
+}
+
+function fit() {
+  const s = Math.min(innerWidth / 1920, innerHeight / 1080);
+  stage.style.transform = `translate(-50%, -50%) scale(${s})`;
+}
+addEventListener("resize", fit);
+fit();
+document.getElementById("replay").addEventListener("click", replay);
+document.getElementById("replay").hidden = !animate || reduce;
+(document.fonts?.ready ?? Promise.resolve()).then(replay);
+</script>
+</body>
+</html>
