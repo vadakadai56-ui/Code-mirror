@@ -1,0 +1,226 @@
+"""Stage 1 tests: AST -> graph JSON. Run with:  python -m pytest tests/test_graph.py"""
+
+import json
+
+import pytest
+
+from mirror.examples import EXAMPLES
+from mirror.graph_builder import build_graph
+
+CODE = {ex["id"]: ex["code"] for ex in EXAMPLES}
+NODE_TYPES = {"start", "statement", "decision", "loop", "call", "return", "end"}
+
+
+def edges_from(graph, node_id):
+    return [e for e in graph["edges"] if e["from"] == node_id]
+
+
+def node_by_label(graph, prefix):
+    matches = [n for n in graph["nodes"] if n["label"].startswith(prefix)]
+    assert matches, f"no node starting with {prefix!r}"
+    return matches[0]
+
+
+@pytest.mark.parametrize("example_id", CODE)
+def test_every_example_builds_valid_graph(example_id):
+    graph = build_graph(CODE[example_id])
+    json.dumps(graph)  # must be JSON-serialisable for Flask
+    ids = {n["id"] for n in graph["nodes"]}
+
+    for n in graph["nodes"]:
+        assert n["type"] in NODE_TYPES
+    for e in graph["edges"]:
+        assert e["from"] in ids and e["to"] in ids
+        assert e["kind"] in {"normal", "back", "call"}
+    # every line_map entry points at a real node
+    assert set(graph["line_map"].values()) <= ids
+    # each lane has exactly one start and one end
+    for lane_index, lane in enumerate(graph["lanes"]):
+        lane_nodes = [n for n in graph["nodes"] if n["lane"] == lane_index]
+        assert [n["type"] for n in lane_nodes].count("start") == 1
+        assert [n["type"] for n in lane_nodes].count("end") == 1
+        rows = sorted(n["row"] for n in lane_nodes)
+        assert rows == list(range(len(rows))), "rows inside a lane are 0..N-1 with no gaps"
+
+
+def test_fibonacci_while_loop():
+    g = build_graph(CODE["fibonacci"])
+    loop = node_by_label(g, "while count < n")
+    assert loop["type"] == "loop"
+    labels = sorted(e["label"] for e in edges_from(g, loop["id"]))
+    assert labels == ["False", "True"]
+    # the last line of the body jumps back up to the loop
+    body_end = node_by_label(g, "count += 1")
+    assert edges_from(g, body_end["id"]) == [{"from": body_end["id"], "to": loop["id"], "label": None, "kind": "back"}]
+    # the call in the main program links to the function's start
+    call = node_by_label(g, "result = fibonacci(8)")
+    assert call["type"] == "call"
+    start = g["functions"]["fibonacci"]["start"]
+    assert {"from": call["id"], "to": start, "label": None, "kind": "call"} in g["edges"]
+
+
+def test_bubble_sort_break_leaves_the_outer_loop():
+    g = build_graph(CODE["bubble_sort"])
+    brk = node_by_label(g, "break")
+    ret = node_by_label(g, "return items")
+    assert [e["to"] for e in edges_from(g, brk["id"])] == [ret["id"]]
+    # the inner `if` has a False edge straight back to the inner loop
+    inner_if = node_by_label(g, "if items[j]")
+    inner_loop = node_by_label(g, "for j in")
+    assert {"from": inner_if["id"], "to": inner_loop["id"], "label": "False", "kind": "back"} in g["edges"]
+    # nesting depth matches indentation
+    assert inner_loop["col"] == 1 and inner_if["col"] == 2
+
+
+def test_factorial_recursion_and_returns():
+    g = build_graph(CODE["factorial"])
+    returns = [n for n in g["nodes"] if n["type"] == "return"]
+    assert len(returns) == 2
+    end = g["functions"]["factorial"]["end"]
+    for r in returns:
+        assert any(e["to"] == end for e in edges_from(g, r["id"]))
+    recursive = node_by_label(g, "return n * factorial")
+    assert recursive["calls"] == ["factorial"]
+
+
+def test_fizzbuzz_elif_chain():
+    g = build_graph(CODE["fizzbuzz"])
+    decisions = [n for n in g["nodes"] if n["type"] == "decision"]
+    assert [d["label"].split()[0] for d in decisions] == ["if", "elif", "elif"]
+    assert {d["col"] for d in decisions} == {1}, "elif is drawn at the same depth as its if"
+    # the else branch hangs off the last elif's False edge
+    last = decisions[-1]
+    else_target = [e["to"] for e in edges_from(g, last["id"]) if e["label"] == "False"][0]
+    assert g["nodes"][int(else_target[1:])]["label"] == "print(n)"
+
+
+def test_line_map_uses_function_and_line():
+    g = build_graph(CODE["factorial"])
+    # line 2 inside factorial is the `if`; line 6 in the main program is the call
+    assert g["nodes"][int(g["line_map"]["factorial:2"][1:])]["type"] == "decision"
+    assert g["nodes"][int(g["line_map"]["<module>:6"][1:])]["type"] == "call"
+
+
+def test_methods_and_nested_functions_get_their_own_lanes():
+    code = (
+        "class Counter:\n"
+        "    def add(self, x):\n"
+        "        return x + 1\n"
+        "def outer():\n"
+        "    def inner():\n"
+        "        return 1\n"
+        "    return inner()\n"
+    )
+    g = build_graph(code)
+    # qualnames match Python's own co_qualname, which is what the tracer reports
+    assert [lane["func"] for lane in g["lanes"]] == ["<module>", "Counter.add", "outer", "outer.<locals>.inner"]
+    # the class body itself has no lane, but is registered so its steps find the class box
+    class_box = node_by_label(g, "class Counter")
+    assert g["functions"]["Counter"] == {"start": class_box["id"], "end": class_box["id"], "lane": 0}
+    assert g["line_map"]["Counter:2"] == class_box["id"]  # `def add` runs inside the class body
+
+
+def test_multiline_statement_maps_every_line():
+    g = build_graph("total = (1 +\n         2)\n")
+    assert g["line_map"]["<module>:1"] == g["line_map"]["<module>:2"]
+
+
+def test_with_header_is_in_line_map():
+    # Regression: the `with` line was left out of line_map, so it never lit up in playback.
+    g = build_graph("with open('f') as fh:\n    x = 1\n")
+    node = node_by_label(g, "with open('f') as fh")
+    assert g["line_map"]["<module>:1"] == node["id"]
+    assert g["line_map"]["<module>:2"] != node["id"]
+
+
+def test_syntax_error_is_raised():
+    with pytest.raises(SyntaxError):
+        build_graph("if x\n    pass\n")
+
+
+def test_assert_is_a_decision_whose_false_edge_ends_the_lane():
+    code = (
+        "def half(n):\n"
+        "    assert n % 2 == 0, 'odd'\n"
+        "    return n // 2\n"
+        "x = half(4)\n"
+        "assert x == 2\n"
+        "print(x)\n"
+    )
+    g = build_graph(code)
+    for label, func, after in [("assert x == 2", "<module>", "print(x)"), ("assert n % 2 == 0", "half", "return n // 2")]:
+        node = node_by_label(g, label)
+        assert node["type"] == "decision"
+        assert node["func"] == func
+        assert g["line_map"][f'{func}:{node["line"]}'] == node["id"]
+        out = {e["label"]: e for e in edges_from(g, node["id"])}
+        assert set(out) == {"True", "False"}
+        assert out["True"]["to"] == node_by_label(g, after)["id"]
+        assert out["True"]["kind"] == "normal"
+        assert out["False"]["to"] == g["functions"][func]["end"]
+        assert out["False"]["kind"] == "normal"
+
+
+def test_assert_inside_loop_and_multiline_assert():
+    g = build_graph("for i in range(3):\n    assert (i <\n            5)\n")
+    node = node_by_label(g, "assert i < 5")
+    assert node["col"] == 1
+    assert g["line_map"]["<module>:2"] == g["line_map"]["<module>:3"] == node["id"]
+    loop = node_by_label(g, "for i in")
+    out = {e["label"]: e for e in edges_from(g, node["id"])}
+    assert out["True"]["to"] == loop["id"] and out["True"]["kind"] == "back"
+    assert out["False"]["to"] == g["functions"]["<module>"]["end"]
+
+
+MATCH_CODE = '''def describe(value):
+    match value:
+        case 0:
+            return "zero"
+        case int(n) if n < 0:
+            return "negative"
+        case [x, y]:
+            return "pair"
+        case _:
+            return "other"
+'''
+
+
+def test_match_cases_form_a_decision_chain():
+    g = build_graph(MATCH_CODE)
+    match = node_by_label(g, "match value")
+    cases = [n for n in g["nodes"] if n["label"].startswith("case ")]
+    assert [c["label"] for c in cases] == ["case 0", "case int(n) if n < 0", "case [x, y]", "case _"]
+    assert all(c["type"] == "decision" and c["col"] == match["col"] + 1 for c in cases)
+    assert [e["to"] for e in edges_from(g, match["id"])] == [cases[0]["id"]]
+    # each case's False edge tries the next case
+    for a, b in zip(cases, cases[1:]):
+        assert {"from": a["id"], "to": b["id"], "label": "False", "kind": "normal"} in g["edges"]
+    # `case _` always matches, so it has only a True edge
+    assert [e["label"] for e in edges_from(g, cases[-1]["id"])] == ["True"]
+    # bodies are indented under their case
+    assert node_by_label(g, 'return "zero"')["col"] == match["col"] + 2
+
+
+def test_match_without_wildcard_falls_through():
+    g = build_graph("match x:\n    case 1:\n        y = 'one'\n    case 2 | 3:\n        y = 'few'\nprint('after')\n")
+    last_case = node_by_label(g, "case 2 | 3")
+    after = node_by_label(g, "print('after')")
+    assert {"from": last_case["id"], "to": after["id"], "label": "False", "kind": "normal"} in g["edges"]
+    assert {"from": node_by_label(g, "y = 'one'")["id"], "to": after["id"], "label": None, "kind": "normal"} in g["edges"]
+
+
+def test_capture_pattern_and_or_with_wildcard_always_match():
+    for pattern in ["other", "1 | _"]:
+        g = build_graph(f"match x:\n    case {pattern}:\n        y = 1\nz = 2\n")
+        case = node_by_label(g, f"case {pattern}")
+        assert [e["label"] for e in edges_from(g, case["id"])] == ["True"]
+    # a guard makes even `case _` able to fail
+    g = build_graph("match x:\n    case _ if x > 0:\n        y = 1\nz = 2\n")
+    assert sorted(e["label"] for e in edges_from(g, node_by_label(g, "case _ if")["id"])) == ["False", "True"]
+
+
+def test_multiline_case_pattern_maps_all_its_lines():
+    g = build_graph("match p:\n    case [\n        a,\n        b,\n    ]:\n        y = a\n")
+    case = node_by_label(g, "case [a, b]")
+    assert all(g["line_map"][f"<module>:{ln}"] == case["id"] for ln in (2, 3, 4, 5))
+    assert g["line_map"]["<module>:6"] != case["id"]
